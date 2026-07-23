@@ -758,15 +758,14 @@ static enum ggml_status ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer
         return GGML_STATUS_SUCCESS;
     }
 
-    if (ggml_is_quantized(tensor->type) && tensor->view_src == nullptr && ggml_backend_buffer_get_usage(buffer) != GGML_BACKEND_BUFFER_USAGE_COMPUTE) {
-        // initialize padding to 0 to avoid possible NaN values
-        const size_t original_size = ggml_nbytes(tensor);
-        const size_t padded_size = ggml_backend_buft_get_alloc_size(buffer->buft, tensor);
+    // Initialize padding to 0 to avoid possible NaN values or stale data from memory pool reuse
+    // This is critical when using cudaMalloc (without unified memory) as pooled memory contains garbage
+    const size_t original_size = ggml_nbytes(tensor);
+    const size_t padded_size = ggml_backend_buft_get_alloc_size(buffer->buft, tensor);
 
-        if (padded_size > original_size) {
-            ggml_cuda_set_device(ctx->device);
-            CUDA_CHECK(cudaMemset((char *)tensor->data + original_size, 0, padded_size - original_size));
-        }
+    if (padded_size > original_size) {
+        ggml_cuda_set_device(ctx->device);
+        CUDA_CHECK(cudaMemset((char *)tensor->data + original_size, 0, padded_size - original_size));
     }
     return GGML_STATUS_SUCCESS;
 }
