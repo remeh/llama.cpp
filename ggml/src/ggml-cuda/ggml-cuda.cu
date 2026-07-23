@@ -138,8 +138,7 @@ int ggml_cuda_get_device() {
 static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device) {
     ggml_cuda_set_device(device);
     cudaError_t err;
-    const char *um_env = getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY");
-    if (um_env && std::atoi(um_env)) {
+    if (ggml_cuda_getenv_bool("GGML_CUDA_ENABLE_UNIFIED_MEMORY")) {
         err = cudaMallocManaged(ptr, size);
 #if defined(GGML_USE_HIP)
         if (err == hipSuccess) {
@@ -390,8 +389,7 @@ static ggml_cuda_device_info ggml_cuda_init() {
     // configure logging to stdout
     // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
 
-    const char *p2p_env = getenv("GGML_CUDA_P2P");
-    if (p2p_env && std::atoi(p2p_env)) {
+    if (ggml_cuda_getenv_bool("GGML_CUDA_P2P")) {
         for (int id = 0; id < info.physical_device_count; ++id) {
             CUDA_CHECK(cudaSetDevice(id));
             for (int id_other = 0; id_other < info.physical_device_count; ++id_other) {
@@ -606,8 +604,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
             CU_CHECK(cuMemRelease(handle));
 
             // VMM Bug fix for P2P access if GGML_CUDA_P2P is set, or if NCCL build
-            const char *p2p_env = getenv("GGML_CUDA_P2P");
-            bool use_peer_access = p2p_env && std::atoi(p2p_env);
+            bool use_peer_access = ggml_cuda_getenv_bool("GGML_CUDA_P2P");
 #if defined(GGML_USE_NCCL)
             use_peer_access = true;
 #endif // defined(GGML_USE_NCCL)
@@ -1274,8 +1271,7 @@ static void ggml_backend_cuda_host_buffer_free_buffer(ggml_backend_buffer_t buff
 }
 
 static void * ggml_cuda_host_malloc(size_t size) {
-    const char *noppd_env = getenv("GGML_CUDA_NO_PINNED");
-    if (noppd_env && std::atoi(noppd_env)) {
+    if (ggml_cuda_getenv_bool("GGML_CUDA_NO_PINNED")) {
         return nullptr;
     }
 
@@ -3147,7 +3143,7 @@ static bool ggml_cuda_can_fuse(const struct ggml_cgraph *                cgraph,
 // try and fuse nodes and return the number of nodes to skip
 static int ggml_cuda_try_fuse(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph, int i) {
 
-    static bool disable_fusion = getenv("GGML_CUDA_DISABLE_FUSION") != nullptr && std::atoi(getenv("GGML_CUDA_DISABLE_FUSION"));
+    static bool disable_fusion = ggml_cuda_getenv_bool("GGML_CUDA_DISABLE_FUSION");
     if (disable_fusion) {
         return 0;
     }
@@ -4496,7 +4492,7 @@ void ggml_backend_cuda_get_device_memory(int device, size_t * free, size_t * tot
 }
 
 bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size) {
-    if (getenv("GGML_CUDA_REGISTER_HOST") == nullptr) {
+    if (!ggml_cuda_getenv_bool("GGML_CUDA_REGISTER_HOST")) {
         return false;
     }
 
@@ -4519,7 +4515,7 @@ bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size) {
 }
 
 void ggml_backend_cuda_unregister_host_buffer(void * buffer) {
-    if (getenv("GGML_CUDA_REGISTER_HOST") == nullptr) {
+    if (!ggml_cuda_getenv_bool("GGML_CUDA_REGISTER_HOST")) {
         return;
     }
 
@@ -4646,8 +4642,7 @@ static void ggml_backend_cuda_device_get_memory(ggml_backend_dev_t dev, size_t *
     CUDA_CHECK(cudaGetDeviceProperties(&prop, ggml_cuda_get_physical_device(ctx->device)));
 
     // Check if UMA is explicitly enabled via environment variable
-    const char *um_env = getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY");
-    bool uma_env = um_env && std::atoi(um_env);
+    bool uma_env = ggml_cuda_getenv_bool("GGML_CUDA_ENABLE_UNIFIED_MEMORY");
     bool is_uma = prop.integrated > 0 || uma_env;
 
     if (is_uma) {
@@ -4689,7 +4684,7 @@ static void ggml_backend_cuda_device_get_props(ggml_backend_dev_t dev, ggml_back
     props->device_id   = ctx->pci_bus_id.empty() ? nullptr : ctx->pci_bus_id.c_str();
     ggml_backend_cuda_device_get_memory(dev, &props->memory_free, &props->memory_total);
 
-    bool host_buffer = getenv("GGML_CUDA_NO_PINNED") == nullptr;
+    bool host_buffer = !ggml_cuda_getenv_bool("GGML_CUDA_NO_PINNED");
 #ifdef GGML_CUDA_NO_PEER_COPY
     bool events = false;
 #else

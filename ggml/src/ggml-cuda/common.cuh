@@ -25,6 +25,7 @@
 #include <array>
 #include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <cfloat>
 #include <cstdio>
 #include <string>
@@ -369,6 +370,25 @@ static bool ggml_cuda_is_aligned(const ggml_tensor * tensor, const size_t alignm
            tensor->nb[1] % alignment == 0 &&
            tensor->nb[2] % alignment == 0 &&
            tensor->nb[3] % alignment == 0;
+}
+
+// Environment variable boolean helper: returns true if the env var is set to a
+// non-zero integer (e.g. "1", "42") or a common truthy string ("true", "yes",
+// "on", case-insensitive). Returns false when unset, empty, or set to "0",
+// "false", "no", "off".
+static bool ggml_cuda_getenv_bool(const char * name) {
+    const char * val = getenv(name);
+    if (!val) {
+        return false;
+    }
+    if (std::atoi(val) != 0) {
+        return true;
+    }
+    std::string s(val);
+    for (auto & c : s) {
+        c = std::tolower(c);
+    }
+    return s == "true" || s == "yes" || s == "on";
 }
 
 static constexpr __device__ int ggml_cuda_get_physical_warp_size() {
@@ -1247,7 +1267,7 @@ struct ggml_cuda_graph {
     std::vector<node_properties> node_props;
 
     bool is_enabled() const {
-        static const bool disable_cuda_graphs_due_to_env = (getenv("GGML_CUDA_DISABLE_GRAPHS") != nullptr);
+        static const bool disable_cuda_graphs_due_to_env = ggml_cuda_getenv_bool("GGML_CUDA_DISABLE_GRAPHS");
         return !(disable_due_to_gpu_arch || disable_cuda_graphs_due_to_env);
     }
 #endif
