@@ -138,7 +138,8 @@ int ggml_cuda_get_device() {
 static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device) {
     ggml_cuda_set_device(device);
     cudaError_t err;
-    if (getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY") != nullptr) {
+    const char *um_env = getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY");
+    if (um_env && std::atoi(um_env)) {
         err = cudaMallocManaged(ptr, size);
 #if defined(GGML_USE_HIP)
         if (err == hipSuccess) {
@@ -389,7 +390,8 @@ static ggml_cuda_device_info ggml_cuda_init() {
     // configure logging to stdout
     // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
 
-    if (getenv("GGML_CUDA_P2P") != nullptr) {
+    const char *p2p_env = getenv("GGML_CUDA_P2P");
+    if (p2p_env && std::atoi(p2p_env)) {
         for (int id = 0; id < info.physical_device_count; ++id) {
             CUDA_CHECK(cudaSetDevice(id));
             for (int id_other = 0; id_other < info.physical_device_count; ++id_other) {
@@ -604,7 +606,8 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
             CU_CHECK(cuMemRelease(handle));
 
             // VMM Bug fix for P2P access if GGML_CUDA_P2P is set, or if NCCL build
-            bool use_peer_access = getenv("GGML_CUDA_P2P") != nullptr;
+            const char *p2p_env = getenv("GGML_CUDA_P2P");
+            bool use_peer_access = p2p_env && std::atoi(p2p_env);
 #if defined(GGML_USE_NCCL)
             use_peer_access = true;
 #endif // defined(GGML_USE_NCCL)
@@ -1271,7 +1274,8 @@ static void ggml_backend_cuda_host_buffer_free_buffer(ggml_backend_buffer_t buff
 }
 
 static void * ggml_cuda_host_malloc(size_t size) {
-    if (getenv("GGML_CUDA_NO_PINNED") != nullptr) {
+    const char *noppd_env = getenv("GGML_CUDA_NO_PINNED");
+    if (noppd_env && std::atoi(noppd_env)) {
         return nullptr;
     }
 
@@ -4642,7 +4646,8 @@ static void ggml_backend_cuda_device_get_memory(ggml_backend_dev_t dev, size_t *
     CUDA_CHECK(cudaGetDeviceProperties(&prop, ggml_cuda_get_physical_device(ctx->device)));
 
     // Check if UMA is explicitly enabled via environment variable
-    bool uma_env = getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY") != nullptr;
+    const char *um_env = getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY");
+    bool uma_env = um_env && std::atoi(um_env);
     bool is_uma = prop.integrated > 0 || uma_env;
 
     if (is_uma) {
