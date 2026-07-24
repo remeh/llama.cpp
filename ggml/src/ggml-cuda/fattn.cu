@@ -501,11 +501,16 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
     }
 
     // Use the WMMA kernel if possible:
+    // NOTE: skip WMMA for large KV cache (>32K) on AMD to avoid F16 precision loss
+    //       in the online softmax accumulator. The tile kernel uses smaller chunks
+    //       and has better numerical properties for long contexts.
     if (ggml_cuda_should_use_wmma_fattn(cc) && K->ne[1] % FATTN_KQ_STRIDE == 0 && Q->ne[0] != 40 && Q->ne[0] != 72 && Q->ne[0] != 192 && Q->ne[0] != 512 && Q->ne[0] != 576) {
         if (can_use_vector_kernel && Q->ne[1] <= 2) {
             return BEST_FATTN_KERNEL_VEC;
         }
-        return BEST_FATTN_KERNEL_WMMA_F16;
+        if (!GGML_CUDA_CC_IS_AMD(cc) || K->ne[1] <= 32768) {
+            return BEST_FATTN_KERNEL_WMMA_F16;
+        }
     }
 
     // AMD MFMA needs a certain minimum batch size to outscale the tile kernel for large head sizes.
@@ -522,7 +527,8 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
     }
 
     // AMD WMMA is always faster than the tile kernel if the full tile width of 16 can be utilized.
-    if ((amd_wmma_available(cc) && gqa_opt_applies && Q->ne[0] <= 128) && Q->ne[0] != 40 && Q->ne[0] != 72 && Q->ne[1] * gqa_ratio_eff > 8) {
+    // NOTE: skip for large KV cache (>32K) to avoid F16 precision loss in the online softmax
+    if ((amd_wmma_available(cc) && gqa_opt_applies && Q->ne[0] <= 128) && Q->ne[0] != 40 && Q->ne[0] != 72 && Q->ne[1] * gqa_ratio_eff > 8 && K->ne[1] <= 32768) {
         return BEST_FATTN_KERNEL_MMA_F16;
     }
 
